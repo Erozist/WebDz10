@@ -8,12 +8,17 @@ from dateutil.parser import parse
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'quotes_project.settings')
 django.setup()
 
-from quotes.models import Author, Quote
+from quotes.models import Author, Quote, Tag
 from django.contrib.auth.models import User
 
 # Завантаження MongoDB
 client = pymongo.MongoClient(f"mongodb+srv://{os.environ.get('MONGO_USERNAME')}:{os.environ.get('MONGO_PASSWORD')}@cluster0.pubk7cp.mongodb.net")
 db = client.quotes_db
+
+# Отримання користувача для поля created_by
+default_user = User.objects.first()
+if not default_user:
+    raise ValueError("No user found in the database. Please create a user before running this script.")
 
 # Завантаження авторів
 mongo_authors = db.authors.find()
@@ -45,11 +50,18 @@ for mongo_quote in mongo_quotes:
     except Author.DoesNotExist:
         print(f"Skipping quote '{mongo_quote['quote']}' because author '{mongo_quote['author']}' does not exist")
         continue  # Пропускаємо цитати, для яких не знайдено автора
+
+    # Створення тегів та зв'язків з цитатами
+    tags = []
+    for tag_name in mongo_quote['tags']:
+        tag, created = Tag.objects.get_or_create(name=tag_name)
+        tags.append(tag)
     
-    Quote.objects.get_or_create(
+    quote, created = Quote.objects.get_or_create(
         quote=mongo_quote['quote'],
         author=author,
-        tags=','.join(mongo_quote['tags']),
-        created_by=User.objects.first()  # або знайти користувача за потребою
+        created_by=default_user  # Використання існуючого користувача
     )
+    quote.tags.set(tags)
+    quote.save()
 print("Цитати успішно завантажені.")

@@ -1,4 +1,3 @@
-#import migrate_mongo
 from django.urls import path
 from . import views
 
